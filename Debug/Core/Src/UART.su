@@ -1,0 +1,5 @@
+../Core/Src/UART.c:9:6:UART_Init	16	static
+../Core/Src/UART.c:13:19:UART_Print_String	24	static
+../Core/Src/UART.c:17:19:UART_Print_Float	56	static
+../Core/Src/UART.c:33:19:UART_Print_Int	32	static
+../Core/Src/UART.c:39:19:UART_Print_NewLine	16	static
