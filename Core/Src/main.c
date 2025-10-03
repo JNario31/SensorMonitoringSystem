@@ -45,6 +45,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+DMA_HandleTypeDef hdma_i2c1_rx;
+DMA_HandleTypeDef hdma_i2c1_tx;
 
 UART_HandleTypeDef huart2;
 
@@ -60,6 +62,7 @@ uint8_t accDataReady;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
 /* USER CODE BEGIN PFP */
@@ -68,12 +71,48 @@ static void MX_I2C1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/*
+ * On DATA_READY interrupt from ADXL345 start DMA read
+ */
 void HAL_GPIO_EXTI_Callback ( uint16_t GPIO_Pin ){
 	if ( GPIO_Pin == ACC_INT_Pin ){
 
-		/* Set data ready flag */
+		if(ADXL345_ReadAccelerometerDMA(&acc) == HAL_OK){
+
+		} else {
+			/*
+			 * DMA busy, Shouldn't happen
+			 */
+			return HAL_ERROR;
+		}
+	}
+}
+
+/*
+ * I2C DMA Receive complete callback
+ */
+void HAL_I2C_MemRxCpltCallback( I2C_HandleTypeDef *hi2c ){
+
+	/*
+	 * Set flag to tell new data is ready
+	 */
+	if ( hi2c->Instance == I2C1 ){
+		acc.dmaComplete = 1;
 		accDataReady = 1;
 	}
+
+}
+
+void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
+
+    if (hi2c->Instance == I2C1) {
+
+        /* Reset flags to allow retry */
+        acc.dmaComplete = 1;
+        accDataReady = 0;
+
+    }
 }
 
 /* USER CODE END 0 */
@@ -107,6 +146,7 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_I2C1_Init();
   MX_USB_DEVICE_Init();
@@ -128,14 +168,13 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  accDataReady = 0;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if ( accDataReady ){
-		  ADXL345_ReadAcceleration( &acc );
+	  if(accDataReady){
+		  ADXL345_ProcessDMAData( &acc );
 
 		  UART_Print_String(&uart_print, "X: ");
 		  UART_Print_Float(&uart_print, acc.acc_mps2[0], 3);
@@ -146,10 +185,8 @@ int main(void)
 		  UART_Print_String(&uart_print, " g");
 		  UART_Print_NewLine(&uart_print);
 
-		  /* Clear flag */
 		  accDataReady = 0;
 	  }
-
 
 	  if( (HAL_GetTick() - timerLog) >= SAMPLE_TIME_LED_MS ){
 
@@ -282,6 +319,25 @@ static void MX_USART2_UART_Init(void)
   /* USER CODE BEGIN USART2_Init 2 */
 
   /* USER CODE END USART2_Init 2 */
+
+}
+
+/**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
 
 }
 

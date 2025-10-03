@@ -15,6 +15,10 @@ uint8_t ADXL345_Init( ADXL345 *dev, I2C_HandleTypeDef *i2cHandle ){
 	dev->acc_mps2[1]	= 0.0f;
 	dev->acc_mps2[2]	= 0.0f;
 
+	/* Initialize DMA Members */
+	dev->dmaComplete	= 1;
+	memset(dev->rawData, 0,sizeof(dev->rawData));
+
 	/* Store number of transaction errors */
 	uint8_t errNum = 0;
 	HAL_StatusTypeDef status;
@@ -84,27 +88,6 @@ uint8_t ADXL345_Init( ADXL345 *dev, I2C_HandleTypeDef *i2cHandle ){
 
 }
 
-HAL_StatusTypeDef ADXL345_ReadAcceleration( ADXL345 *dev ){
-
-	uint8_t regData[6];
-	HAL_StatusTypeDef status;
-
-	status = ADXL345_ReadRegisters( dev, ADXL345_REG_DATAX0, regData, 6);
-
-	uint16_t accRawSigned[3];
-
-	accRawSigned[0] = (int16_t)((regData[1] << 8) | regData[0]);	//x-axis
-	accRawSigned[1] = (int16_t)((regData[3] << 8) | regData[2]);	//y-axis
-	accRawSigned[2] = (int16_t)((regData[5] << 8) | regData[4]);	//z-axis
-
-	/* 256.0 LSB/g for +-2g range */
-	dev->acc_mps2[0] =  accRawSigned[0] /256.0f;
-	dev->acc_mps2[1] =  accRawSigned[1] /256.0f;
-	dev->acc_mps2[2] =  accRawSigned[2] /256.0f;
-
-	return status;
-
-}
 
 HAL_StatusTypeDef ADXL345_ReadRegister( ADXL345 *dev, uint8_t reg, uint8_t *data ){
 
@@ -122,5 +105,37 @@ HAL_StatusTypeDef ADXL345_WriteRegister( ADXL345 *dev, uint8_t reg, uint8_t *dat
 
 	return HAL_I2C_Mem_Write(dev->i2cHandle, ADXL345_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT, data, 1, HAL_MAX_DELAY);
 
+}
+
+/*
+ *Non-blocking DMA Read
+ */
+HAL_StatusTypeDef ADXL345_ReadAccelerometerDMA( ADXL345 *dev ){
+
+	if(dev->dmaComplete == 0){
+		return HAL_BUSY;
+	}
+
+	dev->dmaComplete = 0;	//Mark DMA is busy
+
+	return HAL_I2C_Mem_Read_DMA(dev->i2cHandle, ADXL345_I2C_ADDR, ADXL345_REG_DATAX0, I2C_MEMADD_SIZE_8BIT, dev->rawData, 6);
+
+}
+
+void ADXL345_ProcessDMAData( ADXL345 *dev){
+
+	/* Only process data if DMA has completed */
+	if(dev->dmaComplete == 0){
+		return;
+	}
+
+	int16_t x_raw = (int16_t)((dev->rawData[1] << 8) | dev->rawData[0]);
+	int16_t y_raw = (int16_t)((dev->rawData[3] << 8) | dev->rawData[2]);
+	int16_t z_raw = (int16_t)((dev->rawData[5] << 8) | dev->rawData[4]);
+
+	/* 256.0 LSB/g for +-2g range */
+	dev->acc_mps2[0] =  x_raw /256.0f;
+	dev->acc_mps2[1] =  y_raw /256.0f;
+	dev->acc_mps2[2] =  z_raw /256.0f;
 }
 

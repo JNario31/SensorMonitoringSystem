@@ -61,8 +61,15 @@ typedef struct {
 	/* I2C handle */
 	I2C_HandleTypeDef *i2cHandle;
 
+	/* DMA buffer */
+	uint8_t rawData[6];
+
+	/* DMA Transfer Complete Flag */
+	volatile int8_t dmaComplete;
+
 	/* Acceleration data (X, Y, Z) in m/s^2 */
 	float acc_mps2[3];
+
 
 } ADXL345;
 
@@ -71,7 +78,13 @@ typedef struct {
  */
 uint8_t ADXL345_Init( ADXL345 *dev, I2C_HandleTypeDef *i2cHandle );
 
-HAL_StatusTypeDef ADXL345_ReadAcceleration( ADXL345 *dev );
+/*
+ * DMA Functions
+ */
+HAL_StatusTypeDef ADXL345_ReadAccelerometerDMA( ADXL345 *dev );
+
+void ADXL345_ProcessDMAData( ADXL345 *dev );
+
 
 /*
  * LOW-LEVEL Functions
