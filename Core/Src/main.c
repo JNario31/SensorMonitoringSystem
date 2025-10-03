@@ -18,11 +18,10 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "usb_device.h"
+#include "cmsis_os.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usbd_cdc_if.h"
 #include "ADXL345.h"
 #include "UART.h"
 /* USER CODE END Includes */
@@ -34,8 +33,6 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define SAMPLE_TIME_LOG_MS 100
-#define SAMPLE_TIME_LED_MS 500
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,6 +47,8 @@ DMA_HandleTypeDef hdma_i2c1_tx;
 
 UART_HandleTypeDef huart2;
 
+osThreadId ledTaskHandle;
+osThreadId uartTaskHandle;
 /* USER CODE BEGIN PV */
 
 ADXL345 acc;
@@ -65,6 +64,9 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
+void StartLEDTask(void const * argument);
+void StartUART(void const * argument);
+
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -130,7 +132,6 @@ int main(void)
   MX_DMA_Init();
   MX_USART2_UART_Init();
   MX_I2C1_Init();
-  MX_USB_DEVICE_Init();
   /* USER CODE BEGIN 2 */
 
   /*Initialize UART*/
@@ -139,13 +140,42 @@ int main(void)
   /* Initialize Accelerometer */
   ADXL345_Init( &acc, &hi2c1 );
 
-  char usbBuf[64];
-
-  /* Timers */
-  uint32_t timerLED = 0;
-  uint32_t timerLog = 0;
 
   /* USER CODE END 2 */
+
+  /* USER CODE BEGIN RTOS_MUTEX */
+  /* add mutexes, ... */
+  /* USER CODE END RTOS_MUTEX */
+
+  /* USER CODE BEGIN RTOS_SEMAPHORES */
+  /* add semaphores, ... */
+  /* USER CODE END RTOS_SEMAPHORES */
+
+  /* USER CODE BEGIN RTOS_TIMERS */
+  /* start timers, add new ones, ... */
+  /* USER CODE END RTOS_TIMERS */
+
+  /* USER CODE BEGIN RTOS_QUEUES */
+  /* add queues, ... */
+  /* USER CODE END RTOS_QUEUES */
+
+  /* Create the thread(s) */
+  /* definition and creation of ledTask */
+  osThreadDef(ledTask, StartLEDTask, osPriorityLow, 0, 128);
+  ledTaskHandle = osThreadCreate(osThread(ledTask), NULL);
+
+  /* definition and creation of uartTask */
+  osThreadDef(uartTask, StartUART, osPriorityNormal, 0, 256);
+  uartTaskHandle = osThreadCreate(osThread(uartTask), NULL);
+
+  /* USER CODE BEGIN RTOS_THREADS */
+  /* add threads, ... */
+  /* USER CODE END RTOS_THREADS */
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -154,34 +184,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-
-	  UART_Print_String(&uart_print, "X: ");
-	  UART_Print_Float(&uart_print, acc.acc_mps2[0], 3);
-	  UART_Print_String(&uart_print, " g, Y: ");
-	  UART_Print_Float(&uart_print, acc.acc_mps2[1], 3);
-	  UART_Print_String(&uart_print, " g, Z: ");
-	  UART_Print_Float(&uart_print, acc.acc_mps2[2], 3);
-	  UART_Print_String(&uart_print, " g");
-	  UART_Print_NewLine(&uart_print);
-
-
-	  if( (HAL_GetTick() - timerLog) >= SAMPLE_TIME_LED_MS ){
-
-		  uint8_t usbBufLen =snprintf(usbBuf, 64, "%.2f, %.2f, %.2f\r\n", acc.acc_mps2[0], acc.acc_mps2[1], acc.acc_mps2[2]);
-
-		  CDC_Transmit_FS( (uint8_t *) usbBuf, usbBufLen );
-
-		  timerLog += SAMPLE_TIME_LOG_MS;
-	  }
-
-
-	  /* Toggle LED */
-	  if ( (HAL_GetTick() - timerLED) >= SAMPLE_TIME_LED_MS ){
-
-		  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-
-		  timerLED += SAMPLE_TIME_LED_MS;
-	  }
   }
   /* USER CODE END 3 */
 }
@@ -310,10 +312,10 @@ static void MX_DMA_Init(void)
 
   /* DMA interrupt init */
   /* DMA1_Stream0_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream0_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream0_IRQn);
   /* DMA1_Stream6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
 
 }
@@ -359,7 +361,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI1_IRQn, 5, 0);
   HAL_NVIC_EnableIRQ(EXTI1_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
@@ -370,6 +372,76 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+/* USER CODE BEGIN Header_StartLEDTask */
+/**
+  * @brief  Function implementing the ledTask thread.
+  * @param  argument: Not used
+  * @retval None
+  */
+/* USER CODE END Header_StartLEDTask */
+void StartLEDTask(void const * argument)
+{
+  /* USER CODE BEGIN 5 */
+  /* Infinite loop */
+  for(;;)
+  {
+	HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+	osDelay(1000);
+  }
+  /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_StartUART */
+/**
+* @brief Function implementing the uartTask thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartUART */
+void StartUART(void const * argument)
+{
+  /* USER CODE BEGIN StartUART */
+  /* Infinite loop */
+  /*
+   * Transmit Data via UART every 0.5s or 500ms
+   */
+  for(;;)
+  {
+	UART_Print_String(&uart_print, "X: ");
+	UART_Print_Float(&uart_print, acc.acc_mps2[0], 3);
+	UART_Print_String(&uart_print, " g, Y: ");
+	UART_Print_Float(&uart_print, acc.acc_mps2[1], 3);
+	UART_Print_String(&uart_print, " g, Z: ");
+	UART_Print_Float(&uart_print, acc.acc_mps2[2], 3);
+	UART_Print_String(&uart_print, " g");
+	UART_Print_NewLine(&uart_print);
+	osDelay(500);
+  }
+  /* USER CODE END StartUART */
+}
+
+/**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM1 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM1)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
+}
 
 /**
   * @brief  This function is executed in case of error occurrence.
