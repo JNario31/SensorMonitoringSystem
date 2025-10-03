@@ -15,10 +15,6 @@ uint8_t ADXL345_Init( ADXL345 *dev, I2C_HandleTypeDef *i2cHandle ){
 	dev->acc_mps2[1]	= 0.0f;
 	dev->acc_mps2[2]	= 0.0f;
 
-	/* Initialize DMA Members */
-	dev->dmaComplete	= 1;
-	memset(dev->rawData, 0,sizeof(dev->rawData));
-
 	/* Store number of transaction errors */
 	uint8_t errNum = 0;
 	HAL_StatusTypeDef status;
@@ -110,24 +106,32 @@ HAL_StatusTypeDef ADXL345_WriteRegister( ADXL345 *dev, uint8_t reg, uint8_t *dat
 /*
  *Non-blocking DMA Read
  */
-HAL_StatusTypeDef ADXL345_ReadAccelerometerDMA( ADXL345 *dev ){
+//HAL_StatusTypeDef ADXL345_ReadAccelerometerDMA( ADXL345 *dev ){
+//
+//	if(dev->dmaComplete == 0){
+//		return HAL_BUSY;
+//	}
+//
+//	dev->dmaComplete = 0;	//Mark DMA is busy
+//
+//	return HAL_I2C_Mem_Read_DMA(dev->i2cHandle, ADXL345_I2C_ADDR, ADXL345_REG_DATAX0, I2C_MEMADD_SIZE_8BIT, dev->rawData, 6);
+//
+//}
 
-	if(dev->dmaComplete == 0){
-		return HAL_BUSY;
+uint8_t ADXL345_ReadAccelerometerDMA( ADXL345 *dev ){
+	if( HAL_I2C_Mem_Read_DMA(dev->i2cHandle, ADXL345_I2C_ADDR, ADXL345_REG_DATAX0, I2C_MEMADD_SIZE_8BIT, dev->rawData, 6) == HAL_OK){
+
+		return 1;
+
+	}else {
+
+		return 0;
+
 	}
-
-	dev->dmaComplete = 0;	//Mark DMA is busy
-
-	return HAL_I2C_Mem_Read_DMA(dev->i2cHandle, ADXL345_I2C_ADDR, ADXL345_REG_DATAX0, I2C_MEMADD_SIZE_8BIT, dev->rawData, 6);
 
 }
 
-void ADXL345_ProcessDMAData( ADXL345 *dev){
-
-	/* Only process data if DMA has completed */
-	if(dev->dmaComplete == 0){
-		return;
-	}
+void ADXL345_ReadAccelerometerDMA_Complete( ADXL345 *dev ){
 
 	int16_t x_raw = (int16_t)((dev->rawData[1] << 8) | dev->rawData[0]);
 	int16_t y_raw = (int16_t)((dev->rawData[3] << 8) | dev->rawData[2]);

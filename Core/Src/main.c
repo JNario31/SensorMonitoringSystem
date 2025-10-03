@@ -78,41 +78,22 @@ static void MX_I2C1_Init(void);
 void HAL_GPIO_EXTI_Callback ( uint16_t GPIO_Pin ){
 	if ( GPIO_Pin == ACC_INT_Pin ){
 
-		if(ADXL345_ReadAccelerometerDMA(&acc) == HAL_OK){
+		ADXL345_ReadAccelerometerDMA(&acc);
 
-		} else {
-			/*
-			 * DMA busy, Shouldn't happen
-			 */
-			return HAL_ERROR;
-		}
 	}
+
 }
 
 /*
  * I2C DMA Receive complete callback
  */
-void HAL_I2C_MemRxCpltCallback( I2C_HandleTypeDef *hi2c ){
+void HAL_I2C_MemRxCpltCallback( I2C_HandleTypeDef *hi2c1 ){
 
-	/*
-	 * Set flag to tell new data is ready
-	 */
-	if ( hi2c->Instance == I2C1 ){
-		acc.dmaComplete = 1;
-		accDataReady = 1;
+	if(hi2c1->Instance == I2C1){
+
+		ADXL345_ReadAccelerometerDMA_Complete( &acc );
+
 	}
-
-}
-
-void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c) {
-
-    if (hi2c->Instance == I2C1) {
-
-        /* Reset flags to allow retry */
-        acc.dmaComplete = 1;
-        accDataReady = 0;
-
-    }
 }
 
 /* USER CODE END 0 */
@@ -173,20 +154,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if(accDataReady){
-		  ADXL345_ProcessDMAData( &acc );
 
-		  UART_Print_String(&uart_print, "X: ");
-		  UART_Print_Float(&uart_print, acc.acc_mps2[0], 3);
-		  UART_Print_String(&uart_print, " g, Y: ");
-		  UART_Print_Float(&uart_print, acc.acc_mps2[1], 3);
-		  UART_Print_String(&uart_print, " g, Z: ");
-		  UART_Print_Float(&uart_print, acc.acc_mps2[2], 3);
-		  UART_Print_String(&uart_print, " g");
-		  UART_Print_NewLine(&uart_print);
+	  UART_Print_String(&uart_print, "X: ");
+	  UART_Print_Float(&uart_print, acc.acc_mps2[0], 3);
+	  UART_Print_String(&uart_print, " g, Y: ");
+	  UART_Print_Float(&uart_print, acc.acc_mps2[1], 3);
+	  UART_Print_String(&uart_print, " g, Z: ");
+	  UART_Print_Float(&uart_print, acc.acc_mps2[2], 3);
+	  UART_Print_String(&uart_print, " g");
+	  UART_Print_NewLine(&uart_print);
 
-		  accDataReady = 0;
-	  }
 
 	  if( (HAL_GetTick() - timerLog) >= SAMPLE_TIME_LED_MS ){
 

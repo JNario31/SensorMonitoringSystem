@@ -81,9 +81,9 @@ uint8_t ADXL345_Init( ADXL345 *dev, I2C_HandleTypeDef *i2cHandle );
 /*
  * DMA Functions
  */
-HAL_StatusTypeDef ADXL345_ReadAccelerometerDMA( ADXL345 *dev );
+uint8_t ADXL345_ReadAccelerometerDMA( ADXL345 *dev );
 
-void ADXL345_ProcessDMAData( ADXL345 *dev );
+void ADXL345_ReadAccelerometerDMA_Complete( ADXL345 *dev );
 
 
 /*
