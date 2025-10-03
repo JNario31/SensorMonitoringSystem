@@ -1,11 +1,12 @@
-Project Materials:
-STM32 NUCLEO-F466re MCU
-ADXL345
+Real-time 3-axis accelerometer monitoring system featuring interrupt-driven data acquisition, DMA-optimized I²C communication, and FreeRTOS task scheduling
+for UART data transfer and blinking LED.
 
-This project version takes x, y, and z accelerometer data measuring +-2gs, communicating via I2C at 100kHz with a data ready interrupt. 
-The project displays the acceleometer data via UART to a serial monitor with a 115200 bps. 
+## 🔧 Hardware
 
-This project streamlines the accelerometer data to memory using the DMA in normal time to improve CPU time by saving on CPU Cycles.
+### Bill of Materials
 
-The project also uses basic freeRTOS task scheduling for two tasks, the first being the UART task transfering the data every 500ms with a
-normal priority. The other is a LED blinking task every 1000ms with a low priority.
+| Component | Model | Quantity | Notes |
+|-----------|-------|----------|-------|
+| Microcontroller | STM32 NUCLEO-F446RE | 1 |
+| Accelerometer | ADXL345 | 1 |
+| Jumper Wires | - | 5 |
